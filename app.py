@@ -1,796 +1,576 @@
 import streamlit as st
 import plotly.graph_objects as go
-import json
-import math
+import plotly.express as px
 import pandas as pd
+import json
 from datetime import datetime
 
 st.set_page_config(
     page_title="WealthPath · Retirement Planner",
-    page_icon="✦",
+    page_icon="💜",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# ─── DESIGN SYSTEM ────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# CSS  —  only layout + custom HTML elements; let config.toml handle widgets
+# ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* ── Reset & base ── */
-*, *::before, *::after { box-sizing: border-box; }
 html, body, [class*="css"], .stApp {
-    font-family: 'Inter', sans-serif;
-    background-color: #0d0f1a !important;
-    color: #e8eaf0 !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
-/* ── Global text colour overrides — catch every Streamlit text node ── */
-p, span, div, li, td, th, label,
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] li,
-[data-testid="stMarkdownContainer"] span,
-[data-testid="stText"],
-.stMarkdown, .stText,
-[class*="st-"] { color: #e8eaf0; }
-
-/* Streamlit default dark-on-light overrides */
-.stApp [data-testid="stVerticalBlock"] p { color: #e8eaf0 !important; }
-[data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] span { color: rgba(255,255,255,0.5) !important; }
-
-/* Dataframe / table text */
-[data-testid="stDataFrame"] td,
-[data-testid="stDataFrame"] th,
-[data-testid="stDataFrame"] span { color: #e8eaf0 !important; }
-
-/* Expander header text */
-[data-testid="stExpander"] summary span { color: rgba(255,255,255,0.6) !important; }
-
-/* Select / dropdown option text */
-[data-testid="stSelectbox"] span,
-[data-testid="stSelectbox"] div { color: #e8eaf0 !important; }
-
-/* Slider value labels */
-[data-testid="stSlider"] span,
-[data-testid="stSlider"] p { color: rgba(255,255,255,0.5) !important; }
-
-/* Radio option text */
-[data-testid="stRadio"] span { color: #e8eaf0 !important; }
-
-/* Hide streamlit chrome */
-#MainMenu, footer, header, [data-testid="stToolbar"],
-[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+/* hide default chrome */
+#MainMenu, footer, header,
+[data-testid="stToolbar"],
+[data-testid="stSidebarCollapsedControl"],
 [data-testid="stSidebar"] { display: none !important; }
-.block-container { padding: 2rem 2.5rem 4rem !important; max-width: 1400px !important; }
 
-/* ── Background gradient blobs ── */
-.stApp::before {
-    content: '';
-    position: fixed; top: -20%; left: -10%;
-    width: 55vw; height: 55vw;
-    background: radial-gradient(circle, rgba(99,66,199,0.13) 0%, transparent 70%);
-    border-radius: 50%; pointer-events: none; z-index: 0;
-}
-.stApp::after {
-    content: '';
-    position: fixed; bottom: -15%; right: -5%;
-    width: 45vw; height: 45vw;
-    background: radial-gradient(circle, rgba(32,178,170,0.10) 0%, transparent 70%);
-    border-radius: 50%; pointer-events: none; z-index: 0;
+.block-container {
+    padding: 2rem 3rem 5rem !important;
+    max-width: 1300px !important;
 }
 
-/* ── Typography ── */
-h1, h2, h3 { font-family: 'Sora', sans-serif; }
-
-/* ── Glass card ── */
-.glass {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.09);
-    border-radius: 20px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    padding: 1.5rem 1.75rem;
-    position: relative;
-    overflow: hidden;
-}
-.glass::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+/* ── ambient background blobs ── */
+.stApp {
+    background: radial-gradient(ellipse 80% 60% at 10% 0%,  rgba(124,92,252,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 50% at 90% 100%, rgba(56,189,248,0.08) 0%, transparent 55%),
+                #0E1117 !important;
 }
 
-/* ── Section label ── */
-.sec-label {
-    font-size: 10px; font-weight: 600; letter-spacing: .12em;
-    text-transform: uppercase; color: rgba(255,255,255,0.35);
-    margin-bottom: 1.1rem; margin-top: 0.25rem;
+/* ── page header ── */
+.wp-header {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 0.25rem;
 }
-
-/* ── Page header ── */
-.page-header {
-    display: flex; align-items: center; gap: 14px;
-    margin-bottom: 2rem;
-}
-.logo-mark {
-    width: 42px; height: 42px; border-radius: 12px;
-    background: linear-gradient(135deg, #6342c7 0%, #20b2aa 100%);
+.wp-logo {
+    width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0;
+    background: linear-gradient(135deg, #7C5CFC 0%, #38BDF8 100%);
     display: flex; align-items: center; justify-content: center;
-    font-size: 20px; flex-shrink: 0;
+    font-size: 22px;
+    box-shadow: 0 0 24px rgba(124,92,252,0.45);
 }
-.page-header h1 {
-    font-size: 22px; font-weight: 700; margin: 0;
-    background: linear-gradient(135deg, #c4b5fd 0%, #67e8f9 100%);
+.wp-title {
+    font-size: 26px; font-weight: 800; margin: 0; line-height: 1.1;
+    background: linear-gradient(120deg, #C4B5FD 0%, #7C5CFC 40%, #38BDF8 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.page-header p { font-size: 13px; color: rgba(255,255,255,0.4); margin: 2px 0 0; }
+.wp-sub { font-size: 13px; color: rgba(250,250,250,0.4); margin: 2px 0 0; }
 
-/* ── Hero corpus card ── */
-.hero-card {
-    background: linear-gradient(135deg, #1e1540 0%, #0f2a3d 60%, #0d1f2d 100%);
-    border: 1px solid rgba(99,66,199,0.35);
-    border-radius: 24px;
-    padding: 2rem 2.25rem;
-    position: relative; overflow: hidden;
-    margin-bottom: 1.25rem;
-}
-.hero-card::before {
-    content: '';
-    position: absolute; top: -40%; right: -10%;
-    width: 320px; height: 320px;
-    background: radial-gradient(circle, rgba(99,66,199,0.25) 0%, transparent 65%);
-    border-radius: 50%;
-}
-.hero-card::after {
-    content: '';
-    position: absolute; bottom: -30%; left: 20%;
-    width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(32,178,170,0.15) 0%, transparent 65%);
-    border-radius: 50%;
-}
-.hero-label {
-    font-size: 11px; font-weight: 600; letter-spacing: .1em;
-    text-transform: uppercase; color: rgba(255,255,255,0.4);
-    margin-bottom: 6px;
-}
-.hero-value {
-    font-family: 'Sora', sans-serif;
-    font-size: 44px; font-weight: 700; line-height: 1;
-    background: linear-gradient(135deg, #fff 0%, #c4b5fd 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    margin-bottom: 6px;
-}
-.hero-sub { font-size: 13px; color: rgba(255,255,255,0.4); }
-.hero-pill {
+/* ── section chips ── */
+.chip {
     display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(32,178,170,0.15); border: 1px solid rgba(32,178,170,0.3);
+    background: rgba(124,92,252,0.12); border: 1px solid rgba(124,92,252,0.3);
     border-radius: 20px; padding: 4px 12px;
-    font-size: 12px; color: #67e8f9; font-weight: 500;
-    margin-top: 12px;
+    font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; color: #A78BFA;
+    margin-bottom: 0.85rem; margin-top: 1.5rem;
 }
 
-/* ── KPI mini cards ── */
-.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.25rem; }
-.kpi-card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px; padding: 1rem 1.1rem;
+/* ── hero result card ── */
+.hero {
+    background: linear-gradient(135deg, #1C1438 0%, #0F2340 70%, #0E1117 100%);
+    border: 1px solid rgba(124,92,252,0.3);
+    border-radius: 24px; padding: 2rem 2.25rem;
+    position: relative; overflow: hidden; margin-bottom: 1rem;
+}
+.hero::before {
+    content: ''; position: absolute;
+    top: -60%; right: -5%; width: 380px; height: 380px;
+    background: radial-gradient(circle, rgba(124,92,252,0.22) 0%, transparent 65%);
+    border-radius: 50%;
+}
+.hero::after {
+    content: ''; position: absolute;
+    bottom: -40%; left: 15%; width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 65%);
+    border-radius: 50%;
+}
+.hero-eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: rgba(250,250,250,0.38); margin-bottom: 8px;
+}
+.hero-amount {
+    font-size: 52px; font-weight: 800; line-height: 1; margin-bottom: 6px;
+    background: linear-gradient(135deg, #fff 0%, #C4B5FD 60%, #38BDF8 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-meta { font-size: 13px; color: rgba(250,250,250,0.38); }
+.hero-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 20px; padding: 5px 13px;
+    font-size: 12px; font-weight: 600;
+}
+.badge-teal  { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.28); color: #7DD3FC; }
+.badge-green { background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.25); color: #6EE7B7; }
+.badge-rose  { background: rgba(251,113,133,0.10); border: 1px solid rgba(251,113,133,0.25); color: #FDA4AF; }
+
+/* ── KPI cards ── */
+.kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.5rem; }
+.kpi {
+    background: #1A1F2E;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px; padding: 1.1rem 1.2rem;
     position: relative; overflow: hidden;
+    transition: border-color .2s;
 }
-.kpi-card::before {
+.kpi::after {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    border-radius: 18px 18px 0 0;
 }
-.kpi-accent-purple::before { background: linear-gradient(90deg, #6342c7, #a78bfa); }
-.kpi-accent-teal::before   { background: linear-gradient(90deg, #20b2aa, #67e8f9); }
-.kpi-accent-rose::before   { background: linear-gradient(90deg, #e11d48, #fb7185); }
-.kpi-accent-amber::before  { background: linear-gradient(90deg, #d97706, #fbbf24); }
-.kpi-label { font-size: 11px; color: rgba(255,255,255,0.38); font-weight: 500; margin-bottom: 6px; }
-.kpi-value { font-size: 19px; font-weight: 600; color: #f1f3f9; font-family: 'Sora', sans-serif; }
-.kpi-sub   { font-size: 10px; color: rgba(255,255,255,0.28); margin-top: 3px; }
+.kpi-p::after { background: linear-gradient(90deg,#7C5CFC,#A78BFA); }
+.kpi-t::after { background: linear-gradient(90deg,#0EA5E9,#38BDF8); }
+.kpi-g::after { background: linear-gradient(90deg,#059669,#34D399); }
+.kpi-o::after { background: linear-gradient(90deg,#D97706,#FCD34D); }
+.kpi-l  { font-size: 11px; color: rgba(250,250,250,0.38); font-weight: 500; margin-bottom: 7px; }
+.kpi-v  { font-size: 20px; font-weight: 700; color: #FAFAFA; }
+.kpi-s  { font-size: 10px; color: rgba(250,250,250,0.25); margin-top: 3px; }
 
-/* ── Streamlit inputs restyled ── */
-/* Text & number inputs — target every possible wrapper Streamlit uses */
-[data-testid="stTextInput"] input,
-[data-testid="stNumberInput"] input,
-input[type="text"], input[type="number"] {
-    background: rgba(255,255,255,0.06) !important;
-    background-color: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    border-radius: 10px !important;
-    color: #e8eaf0 !important;
-    font-size: 14px !important;
-    caret-color: #a78bfa !important;
-}
-input[type="text"]::placeholder,
-input[type="number"]::placeholder { color: rgba(255,255,255,0.2) !important; }
-
-input[type="text"]:focus,
-input[type="number"]:focus,
-[data-testid="stTextInput"] input:focus,
-[data-testid="stNumberInput"] input:focus {
-    background-color: rgba(99,66,199,0.1) !important;
-    border-color: rgba(99,66,199,0.55) !important;
-    box-shadow: 0 0 0 3px rgba(99,66,199,0.12) !important;
-    outline: none !important;
-    color: #e8eaf0 !important;
+/* ── input section card ── */
+.input-card {
+    background: #1A1F2E;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 20px; padding: 1.5rem 1.75rem;
+    margin-bottom: 1rem;
 }
 
-/* Labels */
-[data-testid="stTextInput"] label,
-[data-testid="stTextInput"] label p,
-[data-testid="stNumberInput"] label,
-[data-testid="stNumberInput"] label p,
-[data-testid="stSelectbox"] label,
-[data-testid="stSelectbox"] label p {
-    font-size: 12px !important;
-    color: rgba(255,255,255,0.45) !important;
-    font-weight: 500 !important;
+/* ── risk pills — rendered via st.radio but we style the container ── */
+.risk-desc {
+    font-size: 12px; color: rgba(250,250,250,0.4);
+    margin-top: 4px; margin-bottom: 0;
 }
 
-/* Number input wrapper background */
-[data-testid="stNumberInput"] > div,
-[data-testid="stNumberInput"] > div > div {
-    background: transparent !important;
-    border: none !important;
+/* ── disclaimer ── */
+.disc {
+    font-size: 11px; line-height: 1.7;
+    color: rgba(250,250,250,0.25);
+    background: rgba(124,92,252,0.06);
+    border-left: 2px solid rgba(124,92,252,0.35);
+    border-radius: 0 10px 10px 0;
+    padding: 10px 14px; margin-top: 1rem;
 }
+.disc a { color: rgba(56,189,248,0.6); }
 
-/* +/- stepper buttons */
-[data-testid="stNumberInput"] button {
-    background: rgba(99,66,199,0.15) !important;
-    background-color: rgba(99,66,199,0.15) !important;
-    border: 1px solid rgba(99,66,199,0.3) !important;
-    color: #c4b5fd !important;
-    border-radius: 8px !important;
-    font-size: 16px !important;
+/* ── footer ── */
+.wp-footer {
+    text-align: center; font-size: 11px;
+    color: rgba(250,250,250,0.15); margin-top: 3rem;
+    line-height: 1.8;
 }
-[data-testid="stNumberInput"] button:hover {
-    background: rgba(99,66,199,0.3) !important;
-    border-color: rgba(99,66,199,0.5) !important;
-}
-
-/* Selectbox */
-[data-testid="stSelectbox"] > div > div {
-    background: rgba(255,255,255,0.06) !important;
-    background-color: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    border-radius: 10px !important;
-    color: #e8eaf0 !important;
-}
-
-/* ── Selectbox ── */
-[data-testid="stSelectbox"] > div { border-radius: 10px !important; }
-
-/* ── Slider ── */
-[data-testid="stSlider"] > div > div > div {
-    background: rgba(99,66,199,0.3) !important;
-}
-[data-testid="stSlider"] [data-testid="stThumbValue"] {
-    background: #6342c7 !important; border-radius: 6px !important;
-    font-size: 12px !important;
-}
-.stSlider label { font-size: 12px !important; color: rgba(255,255,255,0.45) !important; font-weight: 500 !important; }
-
-/* ── Buttons ── */
-.stButton > button {
-    background: linear-gradient(135deg, #6342c7 0%, #4f35a3 100%) !important;
-    border: none !important; border-radius: 12px !important;
-    color: white !important; font-weight: 600 !important;
-    font-size: 14px !important; padding: 0.6rem 1.5rem !important;
-    transition: all .2s !important;
-    box-shadow: 0 4px 15px rgba(99,66,199,0.35) !important;
-}
-.stButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 6px 20px rgba(99,66,199,0.5) !important;
-}
-.stDownloadButton > button {
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    border-radius: 12px !important; color: #e8eaf0 !important;
-    font-size: 13px !important; font-weight: 500 !important;
-    transition: all .2s !important;
-}
-.stDownloadButton > button:hover {
-    background: rgba(255,255,255,0.1) !important;
-    border-color: rgba(255,255,255,0.2) !important;
-}
-
-/* ── Risk pills (radio) ── */
-[data-testid="stRadio"] > div {
-    display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap;
-}
-[data-testid="stRadio"] label {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 20px; padding: 6px 16px;
-    font-size: 13px !important; color: #e8eaf0 !important;
-    cursor: pointer; transition: all .15s;
-}
-[data-testid="stRadio"] label:has(input:checked) {
-    background: rgba(99,66,199,0.25);
-    border-color: rgba(99,66,199,0.6);
-    color: #c4b5fd !important;
-}
-[data-testid="stRadio"] > label {
-    font-size: 12px !important; color: rgba(255,255,255,0.45) !important; font-weight: 500 !important;
-}
-
-/* ── Tabs ── */
-.stTabs [data-baseweb="tab-list"] {
-    background: rgba(255,255,255,0.04) !important;
-    border-radius: 14px !important; padding: 5px !important;
-    gap: 3px !important; border: 1px solid rgba(255,255,255,0.07) !important;
-}
-.stTabs [data-baseweb="tab"] {
-    border-radius: 10px !important; font-size: 13px !important;
-    font-weight: 500 !important; color: rgba(255,255,255,0.45) !important;
-    padding: 7px 18px !important;
-}
-.stTabs [aria-selected="true"] {
-    background: rgba(99,66,199,0.3) !important;
-    color: #c4b5fd !important;
-}
-.stTabs [data-baseweb="tab-panel"] { padding-top: 1.25rem !important; }
-
-/* ── Divider ── */
-hr { border-color: rgba(255,255,255,0.07) !important; }
-
-/* ── Expander ── */
-[data-testid="stExpander"] {
-    background: rgba(255,255,255,0.03) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 14px !important;
-}
-[data-testid="stExpander"] summary {
-    font-size: 13px !important; font-weight: 500 !important;
-    color: rgba(255,255,255,0.55) !important;
-}
-
-/* ── DataFrame ── */
-[data-testid="stDataFrame"] {
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 14px !important; overflow: hidden;
-}
-
-/* ── File uploader — compact ── */
-[data-testid="stFileUploader"] {
-    background: rgba(255,255,255,0.03) !important;
-    border: 1px dashed rgba(255,255,255,0.15) !important;
-    border-radius: 12px !important;
-}
-[data-testid="stFileUploader"] section {
-    padding: 0.35rem 0.6rem !important;
-    min-height: unset !important;
-}
-[data-testid="stFileUploader"] section [data-testid="stFileUploaderDropzoneInstructions"] {
-    display: none !important;
-}
-[data-testid="stFileUploader"] section small { display: none !important; }
-[data-testid="stFileUploader"] section button {
-    padding: 4px 12px !important; font-size: 12px !important;
-    border-radius: 8px !important;
-    background: rgba(99,66,199,0.2) !important;
-    border: 1px solid rgba(99,66,199,0.4) !important;
-    color: #c4b5fd !important;
-}
-[data-testid="stFileUploader"] label {
-    font-size: 12px !important;
-    color: rgba(255,255,255,0.45) !important; font-weight: 500 !important;
-}
-
-/* ── Success / info banners ── */
-[data-testid="stSuccess"] { background: rgba(32,178,170,0.12) !important; border-radius: 10px !important; border-color: rgba(32,178,170,0.3) !important; }
-[data-testid="stError"]   { background: rgba(225,29,72,0.12)  !important; border-radius: 10px !important; border-color: rgba(225,29,72,0.3)  !important; }
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
-
-/* ── Caption / helper text ── */
-.stCaption, [data-testid="stCaptionContainer"] {
-    color: rgba(255,255,255,0.3) !important; font-size: 11px !important;
-}
-
-/* ── Disclaimer ── */
-.disclaimer {
-    font-size: 11px; color: rgba(255,255,255,0.25);
-    background: rgba(255,255,255,0.03);
-    border-left: 2px solid rgba(99,66,199,0.4);
-    padding: 10px 14px; border-radius: 0 10px 10px 0;
-    line-height: 1.7; margin-top: 1rem;
-}
-.disclaimer a { color: rgba(103,232,249,0.7); }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── HELPERS ──────────────────────────────────────────────────────────────────
 
-def fmt_inr(v):
+# ─────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+def fmt(v):
     if v >= 1e7:  return f"₹{v/1e7:.2f} Cr"
     if v >= 1e5:  return f"₹{v/1e5:.2f} L"
     return f"₹{v:,.0f}"
 
-RISK_META = {
-    "Very Aggressive": {"color": "#e11d48", "return": 15.0,  "desc": "100% equity / small-cap"},
-    "Aggressive":      {"color": "#d97706", "return": 13.5,  "desc": "Large & mid-cap dominant"},
-    "Balanced":        {"color": "#6342c7", "return": 12.0,  "desc": "60% equity / 40% debt"},
-    "Conservative":    {"color": "#20b2aa", "return": 10.0,  "desc": "Debt-heavy, FD + liquid"},
+RISK = {
+    "🔴  Very Aggressive": {"ret": 15.0, "desc": "100% equity · small & mid-cap heavy · high volatility"},
+    "🟠  Aggressive":       {"ret": 13.5, "desc": "Large & mid-cap dominant · moderate-high volatility"},
+    "🔵  Balanced":         {"ret": 12.0, "desc": "60% equity / 40% debt · moderate volatility"},
+    "🟢  Conservative":     {"ret": 10.0, "desc": "Debt-heavy · FD + liquid funds · low volatility"},
 }
 
-def calculate_corpus(sip, stepup_pct, annual_rate_pct, years):
-    r = (annual_rate_pct / 100) / 12
-    corpus, invested = 0.0, 0.0
+PLOT_THEME = dict(
+    plot_bgcolor  = "rgba(0,0,0,0)",
+    paper_bgcolor = "rgba(0,0,0,0)",
+    font          = dict(family="Plus Jakarta Sans, sans-serif", color="rgba(250,250,250,0.5)"),
+    margin        = dict(l=0, r=0, t=20, b=0),
+    hovermode     = "x unified",
+    hoverlabel    = dict(
+        bgcolor     = "rgba(20,14,50,0.95)",
+        bordercolor = "rgba(124,92,252,0.5)",
+        font        = dict(size=13, color="#FAFAFA", family="Plus Jakarta Sans, sans-serif"),
+    ),
+)
+
+def corpus_calc(sip, stepup, rate_pct, years):
+    r = (rate_pct / 100) / 12
+    c, inv = 0.0, 0.0
     yc, yi = [], []
-    m_sip = sip
     for y in range(1, years + 1):
         for _ in range(12):
-            corpus = (corpus + m_sip) * (1 + r)
-            invested += m_sip
-        yc.append(corpus); yi.append(invested)
-        if y < years: m_sip *= (1 + stepup_pct / 100)
-    return corpus, invested, yc, yi
+            c = (c + sip) * (1 + r)
+            inv += sip
+        yc.append(c); yi.append(inv)
+        if y < years: sip *= (1 + stepup / 100)
+    return c, inv, yc, yi
 
-# ─── PAGE HEADER + IMPORT/EXPORT ROW ─────────────────────────────────────────
 
-hdr_left, hdr_right = st.columns([2, 1], gap="large")
+# ─────────────────────────────────────────────────────────────────────────────
+# STATE  —  import pre-fills session state
+# ─────────────────────────────────────────────────────────────────────────────
+if "imported" not in st.session_state:
+    st.session_state.imported = {}
 
-with hdr_left:
+imp = st.session_state.imported
+C   = imp.get("client", {})
+R   = imp.get("custom_returns", {})
+
+def ci(k, d): return C.get(k, d)
+def ri(k, d): return R.get(k, d)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HEADER
+# ─────────────────────────────────────────────────────────────────────────────
+left_h, right_h = st.columns([3, 1], gap="large")
+
+with left_h:
     st.markdown("""
-    <div class="page-header">
-      <div class="logo-mark">✦</div>
+    <div class="wp-header">
+      <div class="wp-logo">💜</div>
       <div>
-        <h1>WealthPath</h1>
-        <p>Retirement corpus planner · India</p>
+        <div class="wp-title">WealthPath</div>
+        <div class="wp-sub">Retirement corpus planner · India · For SEBI-registered advisors</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-with hdr_right:
-    st.markdown('<p class="sec-label" style="margin-top:0.6rem">Plan file</p>', unsafe_allow_html=True)
-    imp_col, exp_col = st.columns(2, gap="small")
-    with imp_col:
-        uploaded = st.file_uploader(
-            "⬆ Import", type="json",
-            label_visibility="visible",
-            help="Upload a previously exported WealthPath .json plan"
-        )
-
-# export button rendered into exp_col after export_payload is built (below)
-imported = {}
-if uploaded:
-    try:
-        imported = json.load(uploaded)
-        st.toast("Plan imported — fields updated ✓", icon="✅")
-    except Exception:
-        st.toast("Could not read file. Please upload a valid plan JSON.", icon="⚠️")
-
-def iv(key, default):
-    return imported.get("client", {}).get(key, default)
-def rv(key, default):
-    return imported.get("custom_returns", {}).get(key, default)
+with right_h:
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    imp_file = st.file_uploader("📂 Import plan", type="json", label_visibility="visible")
+    if imp_file:
+        try:
+            st.session_state.imported = json.load(imp_file)
+            st.toast("✅ Plan imported successfully!", icon="✅")
+            st.rerun()
+        except Exception:
+            st.toast("⚠️ Could not read file.", icon="⚠️")
 
 st.divider()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# INPUT SECTION
-# ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown('<p class="sec-label">Client details</p>', unsafe_allow_html=True)
+# ─────────────────────────────────────────────────────────────────────────────
+# INPUTS  —  two-column layout, inputs on left, results on right (live)
+# ─────────────────────────────────────────────────────────────────────────────
+in_col, out_col = st.columns([1, 1.55], gap="large")
 
-col_a, col_b, col_c = st.columns([1.2, 1, 1])
-with col_a:
-    client_name = st.text_input("Client name", value=iv("name", "Arjun Sharma"))
-with col_b:
-    current_age = st.number_input("Current age", 18, 70, int(iv("age", 30)), 1)
-with col_c:
-    retire_age = st.number_input("Retirement age", 40, 80, int(iv("retirement_age", 60)), 1)
+with in_col:
 
-years_to_ret = int(retire_age - current_age)
-if years_to_ret <= 0:
-    st.error("Retirement age must be greater than current age.")
-    st.stop()
+    # ── Personal ──────────────────────────────────────────────────────────────
+    st.markdown('<div class="chip">👤 Client details</div>', unsafe_allow_html=True)
 
-st.markdown('<p class="sec-label" style="margin-top:1.25rem">Monthly financials (₹)</p>', unsafe_allow_html=True)
+    client_name = st.text_input("Client name", value=ci("name", "Arjun Sharma"))
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    monthly_income = st.number_input("Monthly income", 10_000, 10_000_000, int(iv("monthly_income", 150_000)), 5_000, format="%d")
-with col2:
-    monthly_expenses = st.number_input("Monthly expenses", 5_000, 9_000_000, int(iv("monthly_expenses", 80_000)), 5_000, format="%d")
-with col3:
-    monthly_sip = st.number_input("Monthly SIP", 500, 5_000_000, int(iv("monthly_sip", 30_000)), 500, format="%d")
+    a1, a2 = st.columns(2)
+    current_age = a1.number_input("Current age", 18, 70,  int(ci("age", 30)), 1)
+    retire_age  = a2.number_input("Retirement age", 40, 80, int(ci("retirement_age", 60)), 1)
+    years = int(retire_age - current_age)
 
-savings_rate = ((monthly_income - monthly_expenses) / monthly_income * 100) if monthly_income else 0
-sip_pct = (monthly_sip / monthly_income * 100) if monthly_income else 0
-st.caption(f"Savings rate: **{savings_rate:.1f}%**  ·  SIP as % of income: **{sip_pct:.1f}%**  ·  Investable surplus: **{fmt_inr(monthly_income - monthly_expenses)}** / mo")
+    if years <= 0:
+        st.error("Retirement age must be greater than current age.")
+        st.stop()
 
-st.markdown('<p class="sec-label" style="margin-top:1.25rem">Growth assumptions</p>', unsafe_allow_html=True)
+    st.caption(f"**{years} years** to build your corpus")
 
-col4, col5 = st.columns(2)
-with col4:
-    annual_stepup = st.slider("Annual SIP step-up (%)", 0.0, 25.0, float(iv("annual_stepup", 10.0)), 0.5)
-with col5:
-    inflation = st.slider("General inflation (%)", 2.0, 12.0, float(iv("inflation", 6.0)), 0.5)
+    # ── Financials ────────────────────────────────────────────────────────────
+    st.markdown('<div class="chip">💰 Monthly financials</div>', unsafe_allow_html=True)
 
-st.markdown('<p class="sec-label" style="margin-top:1.25rem">Risk profile</p>', unsafe_allow_html=True)
+    monthly_income   = st.number_input("Monthly income (₹)",   10_000, 10_000_000, int(ci("monthly_income",   150_000)), 5_000, format="%d")
+    monthly_expenses = st.number_input("Monthly expenses (₹)", 5_000,   9_000_000, int(ci("monthly_expenses",  80_000)), 5_000, format="%d")
+    monthly_sip      = st.number_input("Monthly SIP (₹)",         500,   5_000_000, int(ci("monthly_sip",       30_000)),   500, format="%d")
 
-risk_options = list(RISK_META.keys())
-saved_risk = iv("risk_profile", "Balanced")
-risk_idx = risk_options.index(saved_risk) if saved_risk in risk_options else 2
-risk_profile = st.radio("Risk appetite", risk_options, index=risk_idx, horizontal=True, label_visibility="collapsed")
-meta = RISK_META[risk_profile]
-st.caption(f"{meta['desc']}  ·  Default assumed return: **{meta['return']}% p.a.**")
+    surplus  = monthly_income - monthly_expenses
+    sav_rate = (surplus / monthly_income * 100) if monthly_income else 0
+    sip_pct  = (monthly_sip / monthly_income * 100) if monthly_income else 0
 
-with st.expander("⚙  Edit assumed returns (%)"):
-    rc1, rc2, rc3, rc4 = st.columns(4)
-    ret_va = rc1.number_input("Very Aggressive", 5.0, 30.0, float(rv("very_aggressive", 15.0)),  0.5, format="%.1f")
-    ret_a  = rc2.number_input("Aggressive",      5.0, 25.0, float(rv("aggressive",      13.5)),  0.5, format="%.1f")
-    ret_b  = rc3.number_input("Balanced",        3.0, 20.0, float(rv("balanced",         12.0)), 0.5, format="%.1f")
-    ret_c  = rc4.number_input("Conservative",    2.0, 15.0, float(rv("conservative",     10.0)), 0.5, format="%.1f")
-
-custom_returns = {"Very Aggressive": ret_va, "Aggressive": ret_a, "Balanced": ret_b, "Conservative": ret_c}
-annual_return = custom_returns[risk_profile]
-
-st.divider()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CALCULATIONS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-corpus, total_invested, year_corpus, year_invested = calculate_corpus(
-    monthly_sip, annual_stepup, annual_return, years_to_ret
-)
-total_returns = corpus - total_invested
-real_value    = corpus / ((1 + inflation / 100) ** years_to_ret)
-monthly_swp   = (corpus * 0.04) / 12
-ages          = list(range(current_age + 1, retire_age + 1))
-ages_str      = [str(a) for a in ages]
-final_sip     = monthly_sip * ((1 + annual_stepup / 100) ** (years_to_ret - 1))
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# RESULTS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-st.markdown('<p class="sec-label">Projection results</p>', unsafe_allow_html=True)
-
-# ── Hero + quick stats ──
-hero_col, stats_col = st.columns([1.3, 1], gap="medium")
-
-with hero_col:
     st.markdown(f"""
-    <div class="hero-card">
-      <div class="hero-label">Retirement corpus at age {retire_age}</div>
-      <div class="hero-value">{fmt_inr(corpus)}</div>
-      <div class="hero-sub">{client_name} · {years_to_ret}-year journey · {annual_return}% p.a.</div>
-      <div class="hero-pill">
-        <span>✦</span>
-        <span>{corpus/total_invested:.1f}x wealth multiple · Real value {fmt_inr(real_value)}</span>
-      </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px">
+      <span style="background:rgba(124,92,252,0.12);border:1px solid rgba(124,92,252,0.25);
+                   border-radius:20px;padding:3px 10px;font-size:11px;color:#A78BFA;font-weight:600">
+        Savings {sav_rate:.0f}%
+      </span>
+      <span style="background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.22);
+                   border-radius:20px;padding:3px 10px;font-size:11px;color:#7DD3FC;font-weight:600">
+        SIP {sip_pct:.0f}% of income
+      </span>
+      <span style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.20);
+                   border-radius:20px;padding:3px 10px;font-size:11px;color:#6EE7B7;font-weight:600">
+        Surplus {fmt(surplus)}/mo
+      </span>
     </div>
     """, unsafe_allow_html=True)
 
-with stats_col:
+    # ── Growth assumptions ────────────────────────────────────────────────────
+    st.markdown('<div class="chip">📈 Growth assumptions</div>', unsafe_allow_html=True)
+
+    annual_stepup = st.slider("SIP step-up per year (%)", 0.0, 25.0, float(ci("annual_stepup", 10.0)), 0.5,
+                               format="%.1f%%")
+    inflation     = st.slider("Expected inflation (%)",   2.0, 12.0, float(ci("inflation",      6.0)), 0.5,
+                               format="%.1f%%")
+
+    # ── Risk profile ──────────────────────────────────────────────────────────
+    st.markdown('<div class="chip">⚡ Risk profile</div>', unsafe_allow_html=True)
+
+    risk_keys    = list(RISK.keys())
+    saved_risk   = ci("risk_profile", "🔵  Balanced")
+    risk_idx     = risk_keys.index(saved_risk) if saved_risk in risk_keys else 2
+    risk_profile = st.radio("Risk appetite", risk_keys, index=risk_idx, label_visibility="collapsed")
+    st.caption(RISK[risk_profile]["desc"])
+
+    with st.expander("⚙️  Customise assumed returns"):
+        rc = st.columns(2)
+        ret_va = rc[0].number_input("Very Aggressive %", 5.0, 30.0, float(ri("very_aggressive", 15.0)),  0.5, format="%.1f")
+        ret_a  = rc[1].number_input("Aggressive %",      5.0, 25.0, float(ri("aggressive",      13.5)),  0.5, format="%.1f")
+        rc2 = st.columns(2)
+        ret_b  = rc2[0].number_input("Balanced %",       3.0, 20.0, float(ri("balanced",         12.0)), 0.5, format="%.1f")
+        ret_c  = rc2[1].number_input("Conservative %",   2.0, 15.0, float(ri("conservative",     10.0)), 0.5, format="%.1f")
+
+    custom_ret = {
+        "🔴  Very Aggressive": ret_va,
+        "🟠  Aggressive":      ret_a,
+        "🔵  Balanced":        ret_b,
+        "🟢  Conservative":    ret_c,
+    }
+    annual_return = custom_ret[risk_profile]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CALCULATIONS  (run before rendering right column)
+# ─────────────────────────────────────────────────────────────────────────────
+corpus, total_inv, yc_list, yi_list = corpus_calc(monthly_sip, annual_stepup, annual_return, years)
+
+total_ret  = corpus - total_inv
+real_val   = corpus / ((1 + inflation / 100) ** years)
+monthly_swp = (corpus * 0.04) / 12
+final_sip  = monthly_sip * ((1 + annual_stepup / 100) ** (years - 1))
+ages_str   = [str(current_age + i + 1) for i in range(years)]
+multiple   = corpus / total_inv
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RIGHT COLUMN  —  results
+# ─────────────────────────────────────────────────────────────────────────────
+with out_col:
+
+    # ── Hero card ─────────────────────────────────────────────────────────────
     st.markdown(f"""
-    <div class="kpi-grid" style="grid-template-columns:1fr 1fr; gap:10px;">
-      <div class="kpi-card kpi-accent-purple">
-        <div class="kpi-label">Total invested</div>
-        <div class="kpi-value">{fmt_inr(total_invested)}</div>
-        <div class="kpi-sub">Principal over {years_to_ret} yrs</div>
-      </div>
-      <div class="kpi-card kpi-accent-teal">
-        <div class="kpi-label">Wealth created</div>
-        <div class="kpi-value">{fmt_inr(total_returns)}</div>
-        <div class="kpi-sub">{total_returns/total_invested*100:.0f}% gain on principal</div>
-      </div>
-      <div class="kpi-card kpi-accent-rose">
-        <div class="kpi-label">Monthly SWP (4%)</div>
-        <div class="kpi-value">{fmt_inr(monthly_swp)}</div>
-        <div class="kpi-sub">Est. monthly drawdown</div>
-      </div>
-      <div class="kpi-card kpi-accent-amber">
-        <div class="kpi-label">Final monthly SIP</div>
-        <div class="kpi-value">{fmt_inr(final_sip)}</div>
-        <div class="kpi-sub">After {years_to_ret} step-ups</div>
+    <div class="hero">
+      <div class="hero-eyebrow">Projected retirement corpus · Age {retire_age}</div>
+      <div class="hero-amount">{fmt(corpus)}</div>
+      <div class="hero-meta">{client_name} · {years}-year journey · {annual_return:.1f}% p.a. assumed return</div>
+      <div class="hero-badges">
+        <span class="badge badge-teal">💧 Real value {fmt(real_val)}</span>
+        <span class="badge badge-green">✦ {multiple:.1f}× wealth multiple</span>
+        <span class="badge badge-rose">📅 SWP {fmt(monthly_swp)}/mo</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-# ─── TABS ─────────────────────────────────────────────────────────────────────
-
-tab1, tab2, tab3 = st.tabs(["  📊  Growth chart  ", "  📋  Yearly breakdown  ", "  ⚖  Scenario comparison  "])
-
-PLOT_BG    = "rgba(0,0,0,0)"
-GRID_COLOR = "rgba(255,255,255,0.05)"
-FONT_COLOR = "rgba(255,255,255,0.45)"
-FONT_FMLY  = "Inter, sans-serif"
-
-with tab1:
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=ages_str, y=year_invested,
-        name="Amount invested",
-        fill="tozeroy",
-        fillcolor="rgba(32,178,170,0.08)",
-        line=dict(color="rgba(32,178,170,0.5)", width=1.5, dash="dot"),
-        hovertemplate="Age %{x}<br>Invested: %{customdata}<extra></extra>",
-        customdata=[fmt_inr(v) for v in year_invested],
-    ))
-    fig.add_trace(go.Scatter(
-        x=ages_str, y=year_corpus,
-        name="Corpus value",
-        fill="tonexty",
-        fillcolor="rgba(99,66,199,0.15)",
-        line=dict(color="#a78bfa", width=2.5),
-        hovertemplate="Age %{x}<br>Corpus: %{customdata}<extra></extra>",
-        customdata=[fmt_inr(v) for v in year_corpus],
-    ))
-
-    # Milestone: first ₹1 Cr
-    for i, v in enumerate(year_corpus):
-        if v >= 1e7:
-            fig.add_annotation(
-                x=ages_str[i], y=v,
-                text=f"₹1 Cr @ {ages[i]}",
-                showarrow=True, arrowhead=2,
-                arrowcolor="#f472b6", font=dict(size=11, color="#f472b6"),
-                bgcolor="rgba(20,10,40,0.85)", bordercolor="#f472b6",
-                borderwidth=1, borderpad=5, ax=35, ay=-45,
-            )
-            break
-
-    # Milestone: ₹5 Cr
-    for i, v in enumerate(year_corpus):
-        if v >= 5e7:
-            fig.add_annotation(
-                x=ages_str[i], y=v,
-                text=f"₹5 Cr @ {ages[i]}",
-                showarrow=True, arrowhead=2,
-                arrowcolor="#67e8f9", font=dict(size=11, color="#67e8f9"),
-                bgcolor="rgba(20,10,40,0.85)", bordercolor="#67e8f9",
-                borderwidth=1, borderpad=5, ax=-40, ay=-45,
-            )
-            break
-
-    fig.update_layout(
-        height=400,
-        margin=dict(l=0, r=0, t=10, b=0),
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-                    font=dict(size=12, color=FONT_COLOR), bgcolor="rgba(0,0,0,0)"),
-        xaxis=dict(title="Age", showgrid=False, tickfont=dict(size=11, color=FONT_COLOR),
-                   title_font=dict(color=FONT_COLOR), linecolor="rgba(255,255,255,0.08)"),
-        yaxis=dict(title="Portfolio value", showgrid=True, gridcolor=GRID_COLOR,
-                   tickformat=".2s", tickprefix="₹",
-                   tickfont=dict(size=11, color=FONT_COLOR),
-                   title_font=dict(color=FONT_COLOR)),
-        plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
-        font=dict(family=FONT_FMLY),
-        hoverlabel=dict(bgcolor="rgba(15,10,35,0.95)", bordercolor="rgba(99,66,199,0.5)",
-                        font=dict(size=12, color="#e8eaf0", family=FONT_FMLY)),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("""
-    <div class="disclaimer">
-    ⚠ Projections assume a constant annual return and do not account for market volatility, TER (fund expense ratio),
-    or LTCG taxation. Actual returns on equity mutual funds will vary significantly year to year.
-    For illustrative purposes only — consult a SEBI-registered investment advisor before investing.
-    Verify current regulations at <a href="https://incometaxindia.gov.in" target="_blank">incometaxindia.gov.in</a>
-    and <a href="https://sebi.gov.in" target="_blank">sebi.gov.in</a>.
+    # ── KPI strip ─────────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="kpi-row">
+      <div class="kpi kpi-p">
+        <div class="kpi-l">Total invested</div>
+        <div class="kpi-v">{fmt(total_inv)}</div>
+        <div class="kpi-s">Principal over {years} yrs</div>
+      </div>
+      <div class="kpi kpi-t">
+        <div class="kpi-l">Wealth created</div>
+        <div class="kpi-v">{fmt(total_ret)}</div>
+        <div class="kpi-s">{total_ret/total_inv*100:.0f}% gain on principal</div>
+      </div>
+      <div class="kpi kpi-g">
+        <div class="kpi-l">Monthly SWP (4%)</div>
+        <div class="kpi-v">{fmt(monthly_swp)}</div>
+        <div class="kpi-s">Est. retirement income</div>
+      </div>
+      <div class="kpi kpi-o">
+        <div class="kpi-l">Final monthly SIP</div>
+        <div class="kpi-v">{fmt(final_sip)}</div>
+        <div class="kpi-s">After {years} annual step-ups</div>
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Tabs ──────────────────────────────────────────────────────────────────
+    tab1, tab2, tab3 = st.tabs(["📊  Growth chart", "📋  Year-by-year", "⚖️  Scenarios"])
 
-with tab2:
-    sip_now = monthly_sip
-    rows = []
-    for i in range(years_to_ret):
-        rows.append({
-            "Year": i + 1,
-            "Age": current_age + i + 1,
-            "Monthly SIP": fmt_inr(sip_now),
-            "Total invested": fmt_inr(year_invested[i]),
-            "Corpus value": fmt_inr(year_corpus[i]),
-            "Wealth multiple": f"{year_corpus[i]/year_invested[i]:.2f}x",
-            "Real value (infl-adj.)": fmt_inr(year_corpus[i] / ((1 + inflation/100) ** (i+1))),
-        })
-        sip_now *= (1 + annual_stepup / 100)
+    gc = dict(color="rgba(250,250,250,0.07)")
+    tc = dict(size=11, color="rgba(250,250,250,0.4)")
 
-    df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True, height=420)
-    st.download_button(
-        "⬇  Download as CSV",
-        data=df.to_csv(index=False),
-        file_name=f"{client_name.replace(' ','_')}_yearly_breakdown.csv",
-        mime="text/csv",
-    )
+    with tab1:
+        fig = go.Figure()
 
-
-with tab3:
-    st.markdown('<p class="sec-label">All risk profiles — same SIP inputs</p>', unsafe_allow_html=True)
-
-    fig2 = go.Figure()
-    scenario_rows = []
-    clr = {"Very Aggressive": "#fb7185", "Aggressive": "#fbbf24", "Balanced": "#a78bfa", "Conservative": "#34d399"}
-
-    for profile, ret in custom_returns.items():
-        c, ti, yc, _ = calculate_corpus(monthly_sip, annual_stepup, ret, years_to_ret)
-        rv2  = c / ((1 + inflation/100) ** years_to_ret)
-        swp2 = (c * 0.04) / 12
-        scenario_rows.append({
-            "Profile": profile, "Return (% p.a.)": f"{ret:.1f}%",
-            "Corpus": fmt_inr(c), "Real value": fmt_inr(rv2),
-            "Monthly SWP (4%)": fmt_inr(swp2), "Multiple": f"{c/ti:.1f}x",
-        })
-        fig2.add_trace(go.Scatter(
-            x=ages_str, y=yc,
-            name=f"{profile} · {ret}%",
-            line=dict(color=clr[profile],
-                      width=3 if profile == risk_profile else 1.5,
-                      dash="solid" if profile == risk_profile else "dot"),
-            hovertemplate=f"{profile} | Age %{{x}}: %{{customdata}}<extra></extra>",
-            customdata=[fmt_inr(v) for v in yc],
+        fig.add_trace(go.Scatter(
+            x=ages_str, y=yi_list, name="Amount invested",
+            fill="tozeroy",
+            fillcolor="rgba(56,189,248,0.07)",
+            line=dict(color="rgba(56,189,248,0.4)", width=1.5, dash="dot"),
+            customdata=[fmt(v) for v in yi_list],
+            hovertemplate="Age %{x}<br>Invested: %{customdata}<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=ages_str, y=yc_list, name="Corpus value",
+            fill="tonexty",
+            fillcolor="rgba(124,92,252,0.15)",
+            line=dict(color="#A78BFA", width=2.5),
+            customdata=[fmt(v) for v in yc_list],
+            hovertemplate="Age %{x}<br>Corpus: %{customdata}<extra></extra>",
         ))
 
-    fig2.update_layout(
-        height=360, margin=dict(l=0, r=0, t=10, b=0),
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-                    font=dict(size=11, color=FONT_COLOR), bgcolor="rgba(0,0,0,0)"),
-        xaxis=dict(title="Age", showgrid=False, tickfont=dict(size=11, color=FONT_COLOR),
-                   title_font=dict(color=FONT_COLOR)),
-        yaxis=dict(title="Portfolio value", showgrid=True, gridcolor=GRID_COLOR,
-                   tickformat=".2s", tickprefix="₹",
-                   tickfont=dict(size=11, color=FONT_COLOR), title_font=dict(color=FONT_COLOR)),
-        plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
-        font=dict(family=FONT_FMLY),
-        hoverlabel=dict(bgcolor="rgba(15,10,35,0.95)", bordercolor="rgba(99,66,199,0.5)",
-                        font=dict(size=12, color="#e8eaf0", family=FONT_FMLY)),
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-    st.dataframe(pd.DataFrame(scenario_rows), use_container_width=True, hide_index=True)
+        # milestone annotations
+        milestones = [(1e7,"₹1 Cr","#F472B6",30,-40), (5e7,"₹5 Cr","#34D399",-40,-40), (1e8,"₹10 Cr","#FBBF24",30,-50)]
+        for thresh, label, col, ax, ay in milestones:
+            for i, v in enumerate(yc_list):
+                if v >= thresh:
+                    fig.add_annotation(
+                        x=ages_str[i], y=v, text=f"{label} @ {ages_str[i]}",
+                        showarrow=True, arrowhead=2, arrowcolor=col,
+                        font=dict(size=10, color=col),
+                        bgcolor="rgba(14,17,23,0.9)", bordercolor=col,
+                        borderwidth=1, borderpad=4, ax=ax, ay=ay,
+                    )
+                    break
 
-# ─── EXPORT ───────────────────────────────────────────────────────────────────
+        fig.update_layout(
+            **PLOT_THEME, height=380,
+            legend=dict(orientation="h", y=1.04, x=0,
+                        font=dict(size=12, color="rgba(250,250,250,0.5)"),
+                        bgcolor="rgba(0,0,0,0)"),
+            xaxis=dict(title="Age", showgrid=False, tickfont=tc,
+                       title_font=dict(color="rgba(250,250,250,0.4)"),
+                       linecolor="rgba(255,255,255,0.06)"),
+            yaxis=dict(title="Portfolio value", showgrid=True, gridcolor=gc["color"],
+                       tickformat=".2s", tickprefix="₹", tickfont=tc,
+                       title_font=dict(color="rgba(250,250,250,0.4)")),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("""<div class="disc">
+        ⚠ Assumes constant annual return. Does not account for market volatility, TER, or LTCG taxation.
+        Actual equity fund returns vary significantly. For illustration only —
+        consult a <strong>SEBI-registered investment advisor</strong> before investing.
+        Verify regulations at <a href="https://incometaxindia.gov.in" target="_blank">incometaxindia.gov.in</a>
+        &amp; <a href="https://sebi.gov.in" target="_blank">sebi.gov.in</a>
+        </div>""", unsafe_allow_html=True)
+
+    with tab2:
+        sip_now = monthly_sip
+        rows = []
+        for i in range(years):
+            rows.append({
+                "Yr": i + 1,
+                "Age": current_age + i + 1,
+                "Monthly SIP": fmt(sip_now),
+                "Total invested": fmt(yi_list[i]),
+                "Corpus": fmt(yc_list[i]),
+                "Multiple": f"{yc_list[i]/yi_list[i]:.2f}×",
+                "Real value": fmt(yc_list[i] / ((1 + inflation/100) ** (i+1))),
+            })
+            sip_now *= (1 + annual_stepup / 100)
+
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True, height=380)
+        st.download_button("⬇️  Download CSV", df.to_csv(index=False),
+                           f"{client_name.replace(' ','_')}_breakdown.csv", "text/csv")
+
+    with tab3:
+        fig2 = go.Figure()
+        scen = []
+        pal  = {
+            "🔴  Very Aggressive": "#FB7185",
+            "🟠  Aggressive":       "#FBBF24",
+            "🔵  Balanced":         "#A78BFA",
+            "🟢  Conservative":     "#34D399",
+        }
+        for profile, ret in custom_ret.items():
+            c2, ti2, yc2, _ = corpus_calc(monthly_sip, annual_stepup, ret, years)
+            scen.append({
+                "Profile": profile.split("  ")[1],
+                "Return": f"{ret:.1f}%",
+                "Corpus": fmt(c2),
+                "Real value": fmt(c2 / ((1 + inflation/100) ** years)),
+                "SWP /mo": fmt((c2 * 0.04) / 12),
+                "Multiple": f"{c2/ti2:.1f}×",
+            })
+            fig2.add_trace(go.Scatter(
+                x=ages_str, y=yc2, name=f"{profile.split('  ')[1]} · {ret}%",
+                line=dict(
+                    color=pal[profile],
+                    width=3 if profile == risk_profile else 1.5,
+                    dash="solid" if profile == risk_profile else "dot",
+                ),
+                customdata=[fmt(v) for v in yc2],
+                hovertemplate=f"{profile.split('  ')[1]} | Age %{{x}}: %{{customdata}}<extra></extra>",
+            ))
+
+        fig2.update_layout(
+            **PLOT_THEME, height=320,
+            legend=dict(orientation="h", y=1.05, x=0,
+                        font=dict(size=11, color="rgba(250,250,250,0.5)"),
+                        bgcolor="rgba(0,0,0,0)"),
+            xaxis=dict(title="Age", showgrid=False, tickfont=tc,
+                       title_font=dict(color="rgba(250,250,250,0.4)")),
+            yaxis=dict(title="Portfolio value", showgrid=True, gridcolor=gc["color"],
+                       tickformat=".2s", tickprefix="₹", tickfont=tc,
+                       title_font=dict(color="rgba(250,250,250,0.4)")),
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+        st.dataframe(pd.DataFrame(scen), use_container_width=True, hide_index=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPORT  —  always at bottom, after all values computed
+# ─────────────────────────────────────────────────────────────────────────────
+st.divider()
 
 export_payload = {
-    "version": "1.1",
+    "version": "1.2",
     "exported_at": datetime.now().isoformat(),
     "client": {
         "name": client_name, "age": current_age,
         "retirement_age": retire_age,
-        "monthly_income": monthly_income, "monthly_expenses": monthly_expenses,
-        "monthly_sip": monthly_sip, "annual_stepup": annual_stepup,
-        "inflation": inflation, "risk_profile": risk_profile,
+        "monthly_income": monthly_income,
+        "monthly_expenses": monthly_expenses,
+        "monthly_sip": monthly_sip,
+        "annual_stepup": annual_stepup,
+        "inflation": inflation,
+        "risk_profile": risk_profile,
     },
     "custom_returns": {
-        "very_aggressive": ret_va, "aggressive": ret_a,
-        "balanced": ret_b, "conservative": ret_c,
+        "very_aggressive": ret_va,
+        "aggressive": ret_a,
+        "balanced": ret_b,
+        "conservative": ret_c,
     },
     "summary": {
-        "corpus": round(corpus, 2), "total_invested": round(total_invested, 2),
-        "real_value": round(real_value, 2), "monthly_swp": round(monthly_swp, 2),
-        "wealth_multiple": round(corpus / total_invested, 2),
-    }
+        "corpus": round(corpus, 2),
+        "total_invested": round(total_inv, 2),
+        "real_value": round(real_val, 2),
+        "monthly_swp": round(monthly_swp, 2),
+        "wealth_multiple": round(multiple, 2),
+    },
 }
 
-# ── Export button rendered into the header right sub-column ──
-with exp_col:
-    st.markdown('<p class="sec-label" style="margin-top:0">⬇ Export</p>', unsafe_allow_html=True)
-    st.download_button(
-        "Export plan",
-        data=json.dumps(export_payload, indent=2),
-        file_name=f"{client_name.replace(' ','_')}_retirement_plan.json",
-        mime="application/json",
-        use_container_width=True,
-    )
+ex1, ex2, ex3 = st.columns([1, 1, 2])
+ex1.download_button(
+    "⬇️  Export plan (JSON)",
+    data=json.dumps(export_payload, indent=2),
+    file_name=f"{client_name.replace(' ','_')}_wealthpath_plan.json",
+    mime="application/json",
+    use_container_width=True,
+)
+ex2.download_button(
+    "⬇️  Download table (CSV)",
+    data=df.to_csv(index=False),
+    file_name=f"{client_name.replace(' ','_')}_breakdown.csv",
+    mime="text/csv",
+    use_container_width=True,
+)
 
-st.divider()
 st.markdown("""
-<p style="font-size:11px;color:rgba(255,255,255,0.18);text-align:center">
-WealthPath is a planning support tool for SEBI-registered advisors. Not investment advice. Returns not guaranteed.<br>
-Verify regulations at incometaxindia.gov.in · sebi.gov.in · pfrda.org.in
-</p>
+<div class="wp-footer">
+  WealthPath is a planning-support tool for SEBI-registered advisors. Not investment advice. Market returns are not guaranteed.<br>
+  Verify regulations · <strong>incometaxindia.gov.in</strong> · <strong>sebi.gov.in</strong> · <strong>pfrda.org.in</strong>
+</div>
 """, unsafe_allow_html=True)
