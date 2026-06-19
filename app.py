@@ -190,33 +190,72 @@ h1, h2, h3 { font-family: 'Sora', sans-serif; }
 .kpi-sub   { font-size: 10px; color: rgba(255,255,255,0.28); margin-top: 3px; }
 
 /* ── Streamlit inputs restyled ── */
+/* Text & number inputs — target every possible wrapper Streamlit uses */
 [data-testid="stTextInput"] input,
 [data-testid="stNumberInput"] input,
-[data-testid="stSelectbox"] > div > div {
-    background: rgba(255,255,255,0.05) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
+input[type="text"], input[type="number"] {
+    background: rgba(255,255,255,0.06) !important;
+    background-color: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
     border-radius: 10px !important;
     color: #e8eaf0 !important;
     font-size: 14px !important;
+    caret-color: #a78bfa !important;
 }
+input[type="text"]::placeholder,
+input[type="number"]::placeholder { color: rgba(255,255,255,0.2) !important; }
+
+input[type="text"]:focus,
+input[type="number"]:focus,
 [data-testid="stTextInput"] input:focus,
 [data-testid="stNumberInput"] input:focus {
-    border-color: rgba(99,66,199,0.6) !important;
-    box-shadow: 0 0 0 3px rgba(99,66,199,0.15) !important;
+    background-color: rgba(99,66,199,0.1) !important;
+    border-color: rgba(99,66,199,0.55) !important;
+    box-shadow: 0 0 0 3px rgba(99,66,199,0.12) !important;
     outline: none !important;
+    color: #e8eaf0 !important;
 }
+
+/* Labels */
 [data-testid="stTextInput"] label,
+[data-testid="stTextInput"] label p,
 [data-testid="stNumberInput"] label,
-[data-testid="stSelectbox"] label {
-    font-size: 12px !important; color: rgba(255,255,255,0.45) !important;
+[data-testid="stNumberInput"] label p,
+[data-testid="stSelectbox"] label,
+[data-testid="stSelectbox"] label p {
+    font-size: 12px !important;
+    color: rgba(255,255,255,0.45) !important;
     font-weight: 500 !important;
 }
-/* Number input arrows */
+
+/* Number input wrapper background */
+[data-testid="stNumberInput"] > div,
+[data-testid="stNumberInput"] > div > div {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* +/- stepper buttons */
 [data-testid="stNumberInput"] button {
-    background: rgba(255,255,255,0.07) !important;
-    border-color: rgba(255,255,255,0.1) !important;
-    color: #e8eaf0 !important;
+    background: rgba(99,66,199,0.15) !important;
+    background-color: rgba(99,66,199,0.15) !important;
+    border: 1px solid rgba(99,66,199,0.3) !important;
+    color: #c4b5fd !important;
     border-radius: 8px !important;
+    font-size: 16px !important;
+}
+[data-testid="stNumberInput"] button:hover {
+    background: rgba(99,66,199,0.3) !important;
+    border-color: rgba(99,66,199,0.5) !important;
+}
+
+/* Selectbox */
+[data-testid="stSelectbox"] > div > div {
+    background: rgba(255,255,255,0.06) !important;
+    background-color: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 10px !important;
+    color: #e8eaf0 !important;
 }
 
 /* ── Selectbox ── */
